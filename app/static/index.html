@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Inventory dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+ body{font:14px system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1c2330}
+ header{background:#1c2330;color:#fff;padding:14px 24px}
+ main{padding:24px;display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+ section{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 3px #0002}
+ h2{margin:0 0 10px;font-size:16px} table{border-collapse:collapse;width:100%}
+ th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #eee} .num{text-align:right}
+ .bar{background:#e4e7ec;border-radius:4px;height:10px;min-width:80px}.bar>i{display:block;height:10px;border-radius:4px;background:#2f6fed}
+ .kpi{display:flex;gap:24px;flex-wrap:wrap}.kpi b{display:block;font-size:22px}
+</style></head><body>
+<header><strong>Inventory &amp; Warehouse Management</strong> &middot; <a style="color:#9cc2ff" href="/docs">API docs</a></header>
+<main>
+ <section id="kpi"><h2>Overview</h2><div class="kpi"></div></section>
+ <section id="low"><h2>Low stock</h2></section>
+ <section id="reorder"><h2>Reorder recommendations</h2></section>
+ <section id="util"><h2>Warehouse utilization</h2></section>
+ <section id="val"><h2>Stock valuation by warehouse</h2></section>
+</main>
+<script>
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const get=p=>fetch("/api/v1/analytics/"+p).then(r=>r.json());
+function table(el,cols,rows){
+  el.insertAdjacentHTML("beforeend", rows.length?`<table><tr>${cols.map(c=>`<th>${esc(c[0])}</th>`).join("")}</tr>${
+    rows.map(r=>`<tr>${cols.map(c=>`<td class="${c[2]||""}">${c[1](r)}</td>`).join("")}</tr>`).join("")}</table>`:"<p>Nothing to show.</p>");
+}
+(async()=>{
+ const d=await get("dashboard");
+ document.querySelector("#kpi .kpi").innerHTML=[["Stock value",d.total_stock_value],["Low-stock items",d.low_stock_count],
+  ["Reorder suggestions",d.reorder_recommendation_count],["Warehouses",d.warehouse_count],["Variants",d.variant_count]]
+  .map(([k,v])=>`<div><b>${esc(v)}</b>${esc(k)}</div>`).join("");
+ table(low,[["SKU",r=>esc(r.sku)],["Name",r=>esc(r.name)],["Available",r=>r.available,"num"],["Reorder pt",r=>r.reorder_point,"num"]],await get("low-stock"));
+ table(reorder,[["SKU",r=>esc(r.sku)],["Order qty",r=>r.recommended_quantity,"num"],["Supplier",r=>esc(r.supplier_id??"-")],["Est. cost",r=>esc(r.estimated_cost??"-"),"num"]],await get("reorder-recommendations"));
+ table(util,[["Warehouse",r=>esc(r.code)],["Used / cap",r=>`${r.used_units} / ${r.capacity_units??"∞"}`,"num"],
+  ["",r=>r.utilization_pct==null?"":`<div class="bar"><i style="width:${Math.min(100,r.utilization_pct)}%"></i></div>`]],await get("warehouse-utilization"));
+ const v=await get("valuation");
+ table(val,[["Warehouse",r=>esc(r.warehouse)],["Units",r=>r.quantity,"num"],["Value",r=>esc(r.value),"num"]],v.by_warehouse);
+})();
+</script></body></html>
